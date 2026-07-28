@@ -1,0 +1,22 @@
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.ipynb_checkpoints/
+
+# Models / large files
+*.pth
+*.pt
+*.ckpt
+
+# Data
+data/
+
+# IDE
+.idea/
+*.swp

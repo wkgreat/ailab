@@ -1,0 +1,25 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -ID:/conda/envs/ai/include
+    - -ID:/conda/envs/ai/Library/include
+    - -ID:/conda/envs/ai/Lib/site-packages/torch/include
+    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/torch/csrc/api/include
+    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/TH
+    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/THC
+    - -ID:/Program Files/NVIDIA/CUDA/v13.2/include
+---
+If:
+  PathMatch: .*\.(cu|cuh)
+CompileFlags:
+  Add:
+    - -xcuda
+    - --cuda-path=D:/Program Files/NVIDIA/CUDA/v13.2
+    - --cuda-gpu-arch=sm_89
+Diagnostics:
+  Suppress:
+    - member_function_call_bad_type
+    - typename_nested_not_found
+    - err_typename_nested_not_found
+    - ovl_no_viable_member_function_in_call
+    - err_ovl_no_viable_member_function_in_call

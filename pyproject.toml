@@ -1,0 +1,57 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+# notebook / 数据脚本不需要 src layout
+src = ["."]
+
+# 跳过的路径
+extend-exclude = [
+    ".ipynb_checkpoints",
+    "data",
+    "**/_inspect_*.py",      # 临时检查脚本
+]
+
+[tool.ruff.lint]
+# 规则集合 (按字母前缀)
+#   E  pycodestyle errors    F  pyflakes (未用变量、未定义名)
+#   W  pycodestyle warnings  I  isort (import 顺序)
+#   UP pyupgrade (语法升级)  B  flake8-bugbear (常见陷阱)
+#   SIM flake8-simplify      C4 flake8-comprehensions
+#   NPY numpy 规则           PD pandas-vet
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "NPY", "PD"]
+
+ignore = [
+    "E501",     # 行太长 —— notebook / 数据列表常常超
+    "E402",     # module-level import 不在文件开头 (notebook 风格)
+    "B008",     # 函数默认值用 Tensor() 这类调用 (PyTorch 常见)
+    "PD015",    # pd.merge 替代 .merge —— 风格洁癖
+    "F401",     # notebook 里常常 import 一堆备用，不当错误
+    "B007",     # for x in ... 但循环变量没用 (epoch / it 等)
+    "SIM108",   # 强行三元运算符
+    "UP015",    # open(..., "r") 显式 "r" 也无所谓
+]
+
+# notebook 是科研 / 实验环境，规则放宽
+[tool.ruff.lint.per-file-ignores]
+"**/*.ipynb" = [
+    "E402",     # cell 之间 import 顺序灵活
+    "E702",     # 一行多语句 (matplotlib 设置常这么写)
+    "E741",     # 变量名叫 l/i/o (数学公式里常用 L)
+    "F811",     # cell 重定义同名函数
+    "F841",     # 显示中间结果常用 _ = ...
+    "B018",     # cell 最后一行表达式做"显示"用 (df.head)
+    "PD002",    # inplace=True 在小脚本里很方便
+]
+
+[tool.ruff.lint.isort]
+known-first-party = []
+# 一行一个 import (notebook 视觉更舒服)
+force-single-line = false
+
+[tool.ruff.format]
+# black 兼容风格
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+line-ending = "auto"

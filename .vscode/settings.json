@@ -1,0 +1,107 @@
+{
+  // ============================================================
+  // Python 环境
+  // ============================================================
+  "python.defaultInterpreterPath": "D:\\conda\\envs\\ai\\python.exe",
+  // ============================================================
+  // Pylance / 类型推导 (智能提示核心)
+  // ============================================================
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.indexing": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.userFileIndexingLimit": 5000,
+  "python.analysis.packageIndexDepths": [
+    {
+      "name": "torch",
+      "depth": 5
+    },
+    {
+      "name": "torchvision",
+      "depth": 5
+    },
+    {
+      "name": "numpy",
+      "depth": 5
+    },
+    {
+      "name": "pandas",
+      "depth": 5
+    },
+    {
+      "name": "sklearn",
+      "depth": 5
+    },
+    {
+      "name": "lightgbm",
+      "depth": 5
+    },
+    {
+      "name": "xgboost",
+      "depth": 5
+    },
+    {
+      "name": "matplotlib",
+      "depth": 4
+    },
+    {
+      "name": "scipy",
+      "depth": 4
+    }
+  ],
+  // Inlay hints: 变量旁直接显示推导出的类型 (ipynb 神器)
+  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.callArgumentNames": "partial",
+  "python.analysis.inlayHints.pytestParameters": true,
+  // ============================================================
+  // Notebook 设置
+  // ============================================================
+  "notebook.lineNumbers": "on",
+  "notebook.output.textLineLimit": 100,
+  "notebook.formatOnSave.enabled": true,
+  "notebook.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit"
+  },
+  "jupyter.interactiveWindow.creationMode": "perFile",
+  "jupyter.askForKernelRestart": false,
+  // ============================================================
+  // Ruff: 格式化 + 静态检查 (替代 black + flake8 + isort)
+  // ============================================================
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  },
+  // 旧 linting 扩展关掉 (Ruff 接管)
+  "python.linting.enabled": false,
+  // ============================================================
+  // 杂项
+  // ============================================================
+  "extensions.ignoreRecommendations": true,
+  "files.associations": {
+    "*.cu": "cpp",
+    "*.cuh": "cpp"
+  },
+  "clangd.arguments": [
+    "--enable-config",
+    "--background-index",
+    "--header-insertion=never",
+    "--log=verbose"
+  ],
+  "clangd.path": "C:\\Users\\wkgre\\AppData\\Roaming\\Code\\User\\globalStorage\\llvm-vs-code-extensions.vscode-clangd\\install\\21.1.8\\clangd_21.1.8\\bin\\clangd.exe",
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.ipynb_checkpoints": true,
+    "**/.pytest_cache": true
+  },
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
+}

@@ -1,0 +1,18 @@
+digraph {
+	graph [size="12,12"]
+	node [align=left fontname=monospace fontsize=10 height=0.2 ranksep=0.1 shape=box style=filled]
+	1777193797680 [label="
+ (2, 3, 4)" fillcolor=darkolivegreen1]
+	1777193210624 [label=AddBackward0]
+	1777193210240 -> 1777193210624
+	1777193798352 [label="x
+ (2, 3, 4)" fillcolor=lightblue]
+	1777193798352 -> 1777193210240
+	1777193210240 [label=AccumulateGrad]
+	1777193216864 -> 1777193210624
+	1777193796336 [label="y
+ (2, 3, 4)" fillcolor=lightblue]
+	1777193796336 -> 1777193216864
+	1777193216864 [label=AccumulateGrad]
+	1777193210624 -> 1777193797680
+}
