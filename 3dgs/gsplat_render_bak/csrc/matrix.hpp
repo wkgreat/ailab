@@ -2,7 +2,9 @@
 
 #include <cmath>
 
-namespace gsplat::matrix::cpu {
+namespace gsplat {
+namespace matrix {
+namespace cpu {
 
 template <typename T> struct vec3 {
   T x;
@@ -105,4 +107,6 @@ mat4<T> lookAt(const vec3<T> &eye, const vec3<T> &center, const vec3<T> up) {
   return m;
 }
 
-} // namespace gsplat::matrix::cpu
+} // namespace cpu
+} // namespace matrix
+} // namespace gsplat

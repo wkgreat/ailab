@@ -21,9 +21,11 @@ class BuildCudaExtension(build_ext):
         cuda_home = require_cuda_home()
         self.mkpath(self.build_temp)
 
-        cuda_obj = os.path.join(self.build_temp, "gsplatrender_cuda.obj")
         nvcc = os.path.join(cuda_home, "bin", "nvcc.exe")
-        cuda_src = os.path.join(ROOT, "csrc", "gsplatrender.cu")
+        cuda_sources = [
+            ("gsplatrender_cuda.obj", os.path.join(ROOT, "csrc", "gsplatrender.cu")),
+            ("add_one_cuda.obj", os.path.join(ROOT, "csrc", "add_one.cu")),
+        ]
 
         include_args = [
             "-I" + os.path.join(ROOT, "csrc"),
@@ -31,21 +33,25 @@ class BuildCudaExtension(build_ext):
             "-I" + os.path.join(cuda_home, "include"),
         ]
 
-        subprocess.check_call(
-            [
-                nvcc,
-                "-c",
-                cuda_src,
-                "-o",
-                cuda_obj,
-                "-O3",
-                "-Xcompiler",
-                "/Zc:preprocessor",
-                *include_args,
-            ]
-        )
+        cuda_objects = []
+        for obj_name, cuda_src in cuda_sources:
+            cuda_obj = os.path.join(self.build_temp, obj_name)
+            subprocess.check_call(
+                [
+                    nvcc,
+                    "-c",
+                    cuda_src,
+                    "-o",
+                    cuda_obj,
+                    "-O3",
+                    "-Xcompiler",
+                    "/MD,/Zc:preprocessor",
+                    *include_args,
+                ]
+            )
+            cuda_objects.append(cuda_obj)
 
-        ext.extra_objects = [*getattr(ext, "extra_objects", []), cuda_obj]
+        ext.extra_objects = [*getattr(ext, "extra_objects", []), *cuda_objects]
         super().build_extension(ext)
 
 setup(

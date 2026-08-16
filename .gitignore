@@ -20,3 +20,5 @@ data/
 # IDE
 .idea/
 *.swp
+
+build

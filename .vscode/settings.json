@@ -8,7 +8,7 @@
   // ============================================================
   "python.languageServer": "Pylance",
   "python.analysis.typeCheckingMode": "basic",
-  "python.analysis.autoImportCompletions": true,
+  "python.analysis.autoImportCompletions": false,
   "python.analysis.indexing": true,
   "python.analysis.diagnosticMode": "workspace",
   "python.analysis.userFileIndexingLimit": 5000,
@@ -62,7 +62,6 @@
   "notebook.output.textLineLimit": 100,
   "notebook.formatOnSave.enabled": true,
   "notebook.codeActionsOnSave": {
-    "source.organizeImports": "explicit",
     "source.fixAll": "explicit"
   },
   "jupyter.interactiveWindow.creationMode": "perFile",
@@ -74,8 +73,7 @@
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit",
-      "source.organizeImports": "explicit"
+      "source.fixAll": "explicit"
     }
   },
   // 旧 linting 扩展关掉 (Ruff 接管)
@@ -91,6 +89,7 @@
   "clangd.arguments": [
     "--enable-config",
     "--background-index",
+    "--function-arg-placeholders=false",
     "--header-insertion=never",
     "--log=verbose"
   ],

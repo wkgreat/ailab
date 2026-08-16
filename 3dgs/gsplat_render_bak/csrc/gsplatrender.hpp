@@ -4,7 +4,7 @@
 
 using namespace gsplat::matrix;
 
-typedef struct GSplatData {
+struct GSplatData {
   float *pos3d;
   float *scale;
   float *rot;
@@ -13,25 +13,28 @@ typedef struct GSplatData {
   int nsplats;
 };
 
-typedef struct Viewport {
+struct Viewport {
   int width;
   int height;
 };
 
-typedef struct CameraInfo {
+struct CameraInfo {
   cpu::vec3f eye;
   cpu::vec3f center;
   cpu::vec3f up;
 };
 
-typedef struct ProjectionInfo {
+struct ProjectionInfo {
   float near;
   float far;
   float fovy;
 };
 
-typedef struct SceneInfo {
+struct SceneInfo {
   Viewport viewport;
   CameraInfo camera;
   ProjectionInfo projection;
 };
+
+void gsplat_rasterize_gpu(GSplatData splats, SceneInfo scene,
+                          float **out_image);
