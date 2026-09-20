@@ -57,25 +57,21 @@ __host__ static void debug_print_mat4x4f(DebugPrintFn debug_print,
               m[3][1], m[3][2], m[3][3]);
 }
 
-__global__ void image_set_color_kernel(vec4f *image, SplatSceneGPU scene,
-                                       float red, float green, float blue,
-                                       float alpha) {
+__global__ void image_set_color_kernel(vec4f *image, SplatSceneGPU scene) {
 
   int wid = blockDim.x * blockIdx.x + threadIdx.x;
   int hid = blockDim.y * blockIdx.y + threadIdx.y;
   if (wid < scene.width && hid < scene.height) {
     int idx = hid * scene.width + wid;
-    image[idx] = vec4f(red, green, blue, alpha);
+    image[idx] = scene.bgcolor;
   }
 }
 
-void image_set_color_gpu(vec4f *image_gpu, SplatSceneGPU scene, float red,
-                         float green, float blue, float alpha) {
+void image_set_color_gpu(vec4f *image_gpu, SplatSceneGPU scene) {
   dim3 blockDim(16, 16, 1);
   dim3 gridDim((blockDim.x + scene.width - 1) / blockDim.x,
                (blockDim.y + scene.height - 1) / blockDim.y, 1);
-  image_set_color_kernel<<<gridDim, blockDim, 0>>>(image_gpu, scene, red, green,
-                                                   blue, alpha);
+  image_set_color_kernel<<<gridDim, blockDim, 0>>>(image_gpu, scene);
 }
 
 __device__ mat2x3f compute_jacobian(vec4f &viewpos, vec2f &viewport,
@@ -453,6 +449,35 @@ void gsplat_tile_info_free(SplatTileInfo tileinfo) {
   cudaFree(tileinfo.index.entries);
 }
 
+__global__ void gsplat_tile_splat_sort(SplatData2DGPU splats2d,
+                                       SplatTileInfo tileinfo, int tileId) {}
+
+void gsplat_tile_bitonic_make() {}
+void gsplat_tile_bitonic_merge() {}
+
+void gsplat_tile_bitonic_sort(SplatData2DGPU splat2d, SplatTileInfo tileinfo,
+                              int tileId, int s) {
+
+  // TODO gsplat tile sort
+}
+
+void gsplat_splat_sort(SplatData2DGPU splats2d, SplatTileInfo tileinfo) {
+  int *tileIdxOffset;
+  int *tileIdxStride;
+  size_t byteSize = tileinfo.nums.x * tileinfo.nums.y * sizeof(int);
+  tileIdxOffset = (int *)malloc(byteSize);
+  tileIdxStride = (int *)malloc(byteSize);
+  cudaMemcpy(tileIdxOffset, tileinfo.index.offset, byteSize,
+             cudaMemcpyDeviceToHost);
+  cudaMemcpy(tileIdxStride, tileinfo.index.stride, byteSize,
+             cudaMemcpyDeviceToHost);
+
+  for (int tileId = 0; tileId < tileinfo.nums.x * tileinfo.nums.y; ++tileId) {
+
+    // sort splat for each tile
+  }
+}
+
 __global__ void gsplat_rasterize_kernel(SplatSceneGPU scene,
                                         SplatData2DGPU splats2d,
                                         float *out_image) {
@@ -477,7 +502,8 @@ __global__ void gsplat_rasterize_kernel(SplatSceneGPU scene,
 
 __global__ void gsplat_tile_paint_kernel(SplatSceneGPU scene,
                                          SplatData2DGPU splats2d,
-                                         SplatTileInfo tileinfo, vec4f *image) {
+                                         SplatTileInfo tileinfo, bool *imgmask,
+                                         vec4f *image) {
   int tx = blockDim.x * blockIdx.x + threadIdx.x;
   int ty = blockDim.y * blockIdx.y + threadIdx.y;
   if (tx >= tileinfo.nums.x || ty >= tileinfo.nums.y) {
@@ -524,6 +550,7 @@ __global__ void gsplat_tile_paint_kernel(SplatSceneGPU scene,
 
             image[py * scene.width + px] = rgba;
           }
+          imgmask[py * scene.width + px] = true;
         }
       }
     }
@@ -532,12 +559,14 @@ __global__ void gsplat_tile_paint_kernel(SplatSceneGPU scene,
   // transmission to opacity
   for (int px = tilebox.x.min; px <= tilebox.x.max; ++px) {
     for (int py = tilebox.y.min; py <= tilebox.y.max; ++py) {
-      vec4f rgba = image[py * scene.width + px];
-      rgba.w = 1 - rgba.w;
-      rgba.x *= rgba.w;
-      rgba.y *= rgba.w;
-      rgba.z *= rgba.w;
-      image[py * scene.width + px] = rgba;
+      if (imgmask[py * scene.width + px]) {
+        vec4f rgba = image[py * scene.width + px];
+        rgba.x = rgba.x + rgba.w * scene.bgcolor.x;
+        rgba.y = rgba.y + rgba.w * scene.bgcolor.y;
+        rgba.z = rgba.z + rgba.w * scene.bgcolor.z;
+        rgba.w = 1; // opacity
+        image[py * scene.width + px] = rgba;
+      }
     }
   }
 }
@@ -604,6 +633,7 @@ void gsplat_rasterize_gpu(SplatScene &scene, SplatData &splats,
 
   SplatSceneGPU scene_gpu{mat4x4f(scene.viewmtx),
                           mat4x4f(scene.projmtx),
+                          vec4f(scene.bgcolor),
                           vec3f(scene.eye),
                           scene.near,
                           scene.far,
@@ -634,14 +664,18 @@ void gsplat_rasterize_gpu(SplatScene &scene, SplatData &splats,
   size_t imageByteSize = scene.width * scene.height * sizeof(vec4f);
   vec4f *image_gpu;
   cudaMalloc(&image_gpu, imageByteSize);
-  image_set_color_gpu(image_gpu, scene_gpu, 0.0, 0.0, 0.0, 1.0);
+
+  image_set_color_gpu(image_gpu, scene_gpu);
   CUDA_CHECK_LAST_ERROR(debug_print);
 
   dim3 blockDim(16, 16);
   dim3 gridDim((blockDim.x + tileinfo_gpu.nums.x - 1) / blockDim.x,
                (blockDim.y + tileinfo_gpu.nums.y - 1) / blockDim.y);
-  gsplat_tile_paint_kernel<<<gridDim, blockDim>>>(scene_gpu, splats2d_gpu,
-                                                  tileinfo_gpu, image_gpu);
+  bool *imgmask_gpu;
+  cudaMalloc(&imgmask_gpu, scene.width * scene.height * sizeof(bool));
+  cudaMemset(imgmask_gpu, 0, scene.width * scene.height * sizeof(bool));
+  gsplat_tile_paint_kernel<<<gridDim, blockDim>>>(
+      scene_gpu, splats2d_gpu, tileinfo_gpu, imgmask_gpu, image_gpu);
 
   // int blockDim = 256;
   // int gridDim = (blockDim + nsplats - 1) / blockDim;

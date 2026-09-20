@@ -8,6 +8,7 @@ struct SplatScene {
   float *viewmtx;
   float *projmtx;
   float *eye;
+  float *bgcolor;
   float near;
   float far;
   float fovy;
@@ -18,6 +19,7 @@ struct SplatScene {
 struct SplatSceneGPU {
   mat4x4f viewmtx;
   mat4x4f projmtx;
+  vec4f bgcolor;
   vec3f eye;
   float near;
   float far;

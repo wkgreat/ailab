@@ -68,6 +68,10 @@ static PyObject *gsplat_rasterize(PyObject *self, PyObject *args) {
     return nullptr;
   }
 
+  PyObject *bgcolor_obj = PyObject_GetAttrString(scene, "bgcolor");
+  PyArrayObject *bgcolor_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(bgcolor_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+
   PyObject *viewmtx_obj = PyObject_GetAttrString(scene, "viewmtx");
   PyArrayObject *viewmtx_arr = reinterpret_cast<PyArrayObject *>(
       PyArray_FROM_OTF(viewmtx_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
@@ -121,6 +125,7 @@ static PyObject *gsplat_rasterize(PyObject *self, PyObject *args) {
   if (!viewmtx_arr || !projmtx_arr || !pos3d_arr || !scale_arr || !rot_arr ||
       !opacity_arr || !sh_arr) {
     PySys_WriteStderr("arr is null!");
+    Py_XDECREF(bgcolor_arr);
     Py_XDECREF(viewmtx_arr);
     Py_XDECREF(projmtx_arr);
     Py_XDECREF(pos3d_arr);
@@ -162,6 +167,7 @@ static PyObject *gsplat_rasterize(PyObject *self, PyObject *args) {
   SplatScene splatScene;
   splatScene.viewmtx = static_cast<float *>(PyArray_DATA(viewmtx_arr));
   splatScene.projmtx = static_cast<float *>(PyArray_DATA(projmtx_arr));
+  splatScene.bgcolor = static_cast<float *>(PyArray_DATA(bgcolor_arr));
   splatScene.eye = eye;
   splatScene.near = near;
   splatScene.far = far;
@@ -211,6 +217,7 @@ static PyObject *gsplat_rasterize(PyObject *self, PyObject *args) {
     PyErr_NoMemory();
   }
 
+  Py_XDECREF(bgcolor_arr);
   Py_XDECREF(viewmtx_arr);
   Py_XDECREF(pos3d_arr);
   Py_XDECREF(scale_arr);
