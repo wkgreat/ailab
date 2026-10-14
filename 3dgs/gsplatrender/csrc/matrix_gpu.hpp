@@ -358,7 +358,7 @@ __host__ __device__ inline vec4f operator/(const vec4f &v, const float w) {
 
 // length
 __host__ __device__ inline float length(const vec3f &v) {
-  const float squared = v.x * v.x + v.y * v.y + v.z;
+  const float squared = v.x * v.x + v.y * v.y + v.z * v.z;
 #ifdef __CUDA_ARCH__
   return sqrtf(squared);
 #else

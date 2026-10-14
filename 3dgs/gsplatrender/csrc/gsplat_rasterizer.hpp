@@ -79,3 +79,7 @@ using DebugPrintFn = void (*)(const char *, ...);
 
 void gsplat_rasterize_gpu(SplatScene &scene, SplatData &splats, float **image,
                           DebugPrintFn debug_print = nullptr);
+
+// debug: 仅执行 compute kernel，将 splats2d 结果回传 host
+void gsplat_compute_debug_gpu(SplatScene &scene, SplatData &splats,
+                              SplatData2DGPU &out_splats2d);

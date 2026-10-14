@@ -4,6 +4,7 @@
 #include "gsplat_rasterizer.hpp"
 #include "matrix_gpu.hpp"
 #include "cuda_utils.cuh"
+#include <cfloat>
 
 using namespace gsplat::matrix::gpu;
 
@@ -107,9 +108,9 @@ __device__ mat3x3f quat_to_mat3(vec4f q) {
   float wy = w * y;
   float wz = w * z;
 
-  return mat3x3f(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz), 2.0 * (xz - wy),
-                 2.0 * (xy - wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx),
-                 2.0 * (xz + wy), 2.0 * (yz - wx), 1.0 - 2.0 * (xx + yy));
+  return mat3x3f(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy),
+                 2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx),
+                 2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy));
 }
 
 __device__ float clamp(float v, float a, float b) {
@@ -225,7 +226,7 @@ __global__ void gsplat_compute_kernel(SplatSceneGPU scene, SplatDataGPU splats,
   vec4f color4 = vec4f(color3, sigmoid(opacity));
 
   splats2d.pos2d[id] = pixpos;
-  splats2d.depth[id] = viewpos.z;
+  splats2d.depth[id] = -viewpos.z; // 注意: 这里的深度反号了一下
   splats2d.cov2d[id] = Cov2D;
   splats2d.rect[id] = rect;
   splats2d.color[id] = color4;
@@ -386,8 +387,8 @@ SplatTileInfo gsplat_tile_info_create(SplatSceneGPU scene,
                                       DebugPrintFn debug_print) {
 
   SplatTileInfo tileinfo;
-  tileinfo.size.x = 64;
-  tileinfo.size.y = 64;
+  tileinfo.size.x = 100;
+  tileinfo.size.y = 100;
   tileinfo.nums.x = (tileinfo.size.x + scene.width - 1) / tileinfo.size.x;
   tileinfo.nums.y = (tileinfo.size.y + scene.height - 1) / tileinfo.size.y;
   int totTileCnt = tileinfo.nums.x * tileinfo.nums.y;
@@ -414,12 +415,12 @@ SplatTileInfo gsplat_tile_info_create(SplatSceneGPU scene,
     for (int y = 0; y < tileinfo.nums.y; ++y) {
       int k = y * tileinfo.nums.x + x;
       nEntries += idxcnt_cpu[k];
-      if (k == 0) {
-        idxoff_cpu[k] = 0;
-      } else {
-        idxoff_cpu[k] = idxoff_cpu[k - 1] + idxcnt_cpu[k - 1];
-      }
     }
+  }
+  int cumsum = 0;
+  for (int k = 0; k < totTileCnt; ++k) {
+    idxoff_cpu[k] = cumsum;
+    cumsum += idxcnt_cpu[k];
   }
   tileinfo.index.nEntries = nEntries;
 
@@ -449,33 +450,133 @@ void gsplat_tile_info_free(SplatTileInfo tileinfo) {
   cudaFree(tileinfo.index.entries);
 }
 
-__global__ void gsplat_tile_splat_sort(SplatData2DGPU splats2d,
-                                       SplatTileInfo tileinfo, int tileId) {}
-
-void gsplat_tile_bitonic_make() {}
-void gsplat_tile_bitonic_merge() {}
-
-void gsplat_tile_bitonic_sort(SplatData2DGPU splat2d, SplatTileInfo tileinfo,
-                              int tileId, int s) {
-
-  // TODO gsplat tile sort
+__host__ __device__ static size_t bitCeil(size_t n) {
+  if (n <= 1) {
+    return 1;
+  }
+  n--;
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+  return n + 1;
 }
 
-void gsplat_splat_sort(SplatData2DGPU splats2d, SplatTileInfo tileinfo) {
-  int *tileIdxOffset;
-  int *tileIdxStride;
-  size_t byteSize = tileinfo.nums.x * tileinfo.nums.y * sizeof(int);
-  tileIdxOffset = (int *)malloc(byteSize);
-  tileIdxStride = (int *)malloc(byteSize);
-  cudaMemcpy(tileIdxOffset, tileinfo.index.offset, byteSize,
-             cudaMemcpyDeviceToHost);
-  cudaMemcpy(tileIdxStride, tileinfo.index.stride, byteSize,
-             cudaMemcpyDeviceToHost);
+__host__ __device__ void swapInt(int &a, int &b) {
+  int t = a;
+  a = b;
+  b = t;
+}
 
-  for (int tileId = 0; tileId < tileinfo.nums.x * tileinfo.nums.y; ++tileId) {
+__global__ void fillInt32Kernel(int *d_vals, int val, size_t n) {
+  size_t i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    // sort splat for each tile
+  if (i >= n)
+    return;
+
+  d_vals[i] = val;
+}
+
+__global__ void gsplat_tile_bitonic_sort(SplatData2DGPU splat2d, int *d_entries,
+                                         int n, int k, int j, bool asc) {
+
+  int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i >= n)
+    return;
+  int a = i ^ j;
+
+  if (i < a) {
+    bool up = ((i & k) == 0) == asc; // i%k==0 equalTo i/k%2==0
+
+    float EXTREM = asc ? FLT_MAX : FLT_MIN;
+    float depth0 = d_entries[i] == -1 ? EXTREM : splat2d.depth[d_entries[i]];
+    float depth1 = d_entries[a] == -1 ? EXTREM : splat2d.depth[d_entries[a]];
+
+    if (up ? (depth0 > depth1) : (depth0 < depth1)) {
+      swapInt(d_entries[i], d_entries[a]);
+    }
   }
+}
+
+void gsplat_tile_splat_sort(SplatData2DGPU splats2d, SplatTileInfo h_tileinfo,
+                            SplatTileInfo d_tileinfo, int tileId,
+                            int *d_cache) {
+
+  int n = h_tileinfo.index.stride[tileId];
+  if (n < 2)
+    return;
+
+  int m = bitCeil(n);
+
+  int blockDim = 256;
+  int blockNum = (blockDim + m - 1) / blockDim;
+
+  int s = h_tileinfo.index.offset[tileId];
+
+  fillInt32Kernel<<<blockNum, blockDim>>>(d_cache, -1, m);
+  cudaMemcpy(d_cache, d_tileinfo.index.entries + s, sizeof(int) * n,
+             cudaMemcpyDeviceToDevice);
+
+  for (int k = 2; k <= m; k <<= 1) {
+    for (int j = k / 2; j > 0; j >>= 1) {
+      gsplat_tile_bitonic_sort<<<blockNum, blockDim>>>(splats2d, d_cache, m, k,
+                                                       j, true);
+    }
+  }
+
+  cudaMemcpy(d_tileinfo.index.entries + s, d_cache, sizeof(int) * n,
+             cudaMemcpyDeviceToDevice);
+}
+
+SplatTileInfo splat_tileinfo_to_host(SplatTileInfo d_tileinfo) {
+
+  SplatTileInfo h_tileinfo;
+
+  h_tileinfo.size = d_tileinfo.size;
+  h_tileinfo.nums = d_tileinfo.nums;
+  size_t byteSize = d_tileinfo.nums.x * d_tileinfo.nums.y * sizeof(int);
+  h_tileinfo.index.offset = (int *)malloc(byteSize);
+  h_tileinfo.index.stride = (int *)malloc(byteSize);
+  cudaMemcpy(h_tileinfo.index.offset, d_tileinfo.index.offset, byteSize,
+             cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_tileinfo.index.stride, d_tileinfo.index.stride, byteSize,
+             cudaMemcpyDeviceToHost);
+  h_tileinfo.index.nEntries = d_tileinfo.index.nEntries;
+  size_t entryByteSize = h_tileinfo.index.nEntries * sizeof(int);
+  h_tileinfo.index.entries = (int *)malloc(entryByteSize);
+  cudaMemcpy(h_tileinfo.index.entries, d_tileinfo.index.entries, entryByteSize,
+             cudaMemcpyDeviceToHost);
+
+  return h_tileinfo;
+}
+
+void gsplat_splat_sort(SplatData2DGPU splats2d, SplatTileInfo d_tileinfo) {
+
+  SplatTileInfo h_tileinfo = splat_tileinfo_to_host(d_tileinfo);
+
+  // d_cache 需要能容纳最大 tile 的 bitonic 填充长度 m（2 的幂），
+  // 而不是 nEntries。否则 fill/sort 会越界写坏相邻显存。
+  size_t max_m = 1;
+  for (int tileId = 0; tileId < h_tileinfo.nums.x * h_tileinfo.nums.y;
+       ++tileId) {
+    size_t m = bitCeil(h_tileinfo.index.stride[tileId]);
+    if (m > max_m) {
+      max_m = m;
+    }
+  }
+  int *d_cache;
+  cudaMalloc(&d_cache, max_m * sizeof(int));
+
+  for (int tileId = 0; tileId < h_tileinfo.nums.x * h_tileinfo.nums.y;
+       ++tileId) {
+    gsplat_tile_splat_sort(splats2d, h_tileinfo, d_tileinfo, tileId, d_cache);
+  }
+
+  cudaFree(d_cache);
+  free(h_tileinfo.index.offset);
+  free(h_tileinfo.index.stride);
+  free(h_tileinfo.index.entries);
 }
 
 __global__ void gsplat_rasterize_kernel(SplatSceneGPU scene,
@@ -524,17 +625,19 @@ __global__ void gsplat_tile_paint_kernel(SplatSceneGPU scene,
     vec4f color = splats2d.color[splatid];
     vec3f rgb(color.x, color.y, color.z);
     float opa = color.w;
-    int pxmin = (int)floor(rect.x);
-    int pymin = (int)floor(rect.y);
-    int pxmax = (int)ceil(rect.z);
-    int pymax = (int)ceil(rect.w);
+
+    // splat rectangle
+    int pxmin = (int)ceilf(rect.x - 0.5f);
+    int pymin = (int)ceilf(rect.y - 0.5f);
+    int pxmax = (int)floorf(rect.z - 0.5f);
+    int pymax = (int)floorf(rect.w - 0.5f);
 
     // for each pixel
     for (int px = pxmin; px <= pxmax; px++) {
       for (int py = pymin; py <= pymax; py++) {
         if (px >= tilebox.x.min && px <= tilebox.x.max && py >= tilebox.y.min &&
             py <= tilebox.y.max) {
-          vec2f p(px, py);
+          vec2f p(px + 0.5f, py + 0.5f);
           vec2f d = p - pos2d;
 
           float weight = compute_weight(d, cov2d);
@@ -658,7 +761,7 @@ void gsplat_rasterize_gpu(SplatScene &scene, SplatData &splats,
               tileinfo_gpu.nums.y, tileinfo_gpu.index.nEntries);
 
   // sort for each tile
-  // TODO
+  gsplat_splat_sort(splats2d_gpu, tileinfo_gpu);
 
   // image
   size_t imageByteSize = scene.width * scene.height * sizeof(vec4f);

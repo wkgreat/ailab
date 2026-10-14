@@ -10,7 +10,11 @@ if cuda_home is None:
     raise RuntimeError("CUDA toolkit not found. Please set CUDA_HOME or CUDA_PATH.")
 
 cuda_include_dir = os.path.join(cuda_home, "include")
-cuda_library_dir = os.path.join(cuda_home, "lib", "x64" if os.name == "nt" else "64")
+cuda_library_dir = (
+    os.path.join(cuda_home, "lib", "x64")
+    if os.name == "nt"
+    else os.path.join(cuda_home, "lib64")
+)
 nvcc = os.path.join(cuda_home, "bin", "nvcc.exe" if os.name == "nt" else "nvcc")
 
 
@@ -81,7 +85,7 @@ setup(
             include_dirs=[np.get_include(), "csrc", cuda_include_dir],
             library_dirs=[cuda_library_dir],
             libraries=["cudart"],
-            extra_compile_args=["/O2"],
+            extra_compile_args=["/O2" if os.name == "nt" else "-O2"],
         ),
     ],
     cmdclass={"build_ext": BuildExtension},

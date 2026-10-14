@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <memory.h>
 
 namespace gsplat {
 namespace cuda {
@@ -29,33 +30,5 @@ __global__ void divide(T *nums, const int d, const int N) {
 }
 } // namespace kernel
 
-namespace device {}
-
-namespace host {
-
-// int getBlockDim1d(cudaDeviceProp prop) {
-//   int mt = prop.maxThreadsPerBlock;
-//   int mx = prop.maxThreadsDim[0];
-//   return std::min(mt, mx);
-// }
-
-// dim3 getBlockDim2d(cudaDeviceProp prop) {
-//   unsigned int mt = prop.maxThreadsPerBlock;
-//   unsigned int s = (unsigned int)std::floor(std::sqrt((double)mt));
-//   unsigned int mx = prop.maxThreadsDim[0];
-//   unsigned int my = prop.maxThreadsDim[1];
-//   return {std::min(mx, s), std::min(my, s), 1};
-// }
-
-// dim3 getBlockDim3d(cudaDeviceProp prop) {
-//   unsigned int mt = prop.maxThreadsPerBlock;
-//   unsigned int s = (unsigned int)std::floor(std::cbrt((double)mt));
-//   unsigned int mx = prop.maxThreadsDim[0];
-//   unsigned int my = prop.maxThreadsDim[1];
-//   unsigned int mz = prop.maxThreadsDim[2];
-//   return {std::min(mx, s), std::min(my, s), std::min(mz, s)};
-// }
-
-} // namespace host
 } // namespace cuda
 } // namespace gsplat

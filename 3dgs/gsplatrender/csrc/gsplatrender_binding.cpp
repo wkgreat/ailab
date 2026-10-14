@@ -228,10 +228,134 @@ static PyObject *gsplat_rasterize(PyObject *self, PyObject *args) {
   return ret_obj;
 }
 
+static PyObject *gsplat_compute_debug(PyObject *self, PyObject *args) {
+  PyObject *scene = nullptr;
+  PyObject *pos3d_obj = nullptr;
+  PyObject *scale_obj = nullptr;
+  PyObject *rot_obj = nullptr;
+  PyObject *opacity_obj = nullptr;
+  PyObject *sh_obj = nullptr;
+
+  if (!PyArg_ParseTuple(args, "OOOOOO", &scene, &pos3d_obj, &scale_obj,
+                        &rot_obj, &opacity_obj, &sh_obj)) {
+    return nullptr;
+  }
+
+  // --- scene
+  PyObject *bgcolor_obj = PyObject_GetAttrString(scene, "bgcolor");
+  PyArrayObject *bgcolor_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(bgcolor_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyObject *viewmtx_obj = PyObject_GetAttrString(scene, "viewmtx");
+  PyArrayObject *viewmtx_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(viewmtx_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyObject *projmtx_obj = PyObject_GetAttrString(scene, "projmtx");
+  PyArrayObject *projmtx_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(projmtx_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+
+  PyObject *eye_obj = PyObject_GetAttrString(scene, "eye");
+  PyObject *eye_x_obj = PyObject_GetAttrString(eye_obj, "x");
+  PyObject *eye_y_obj = PyObject_GetAttrString(eye_obj, "y");
+  PyObject *eye_z_obj = PyObject_GetAttrString(eye_obj, "z");
+  float eye[3] = {static_cast<float>(PyFloat_AsDouble(eye_x_obj)),
+                  static_cast<float>(PyFloat_AsDouble(eye_y_obj)),
+                  static_cast<float>(PyFloat_AsDouble(eye_z_obj))};
+  Py_XDECREF(eye_x_obj); Py_XDECREF(eye_y_obj); Py_XDECREF(eye_z_obj);
+  Py_XDECREF(eye_obj);
+
+  float near = PyFloat_AsDouble(PyObject_GetAttrString(scene, "near"));
+  float far = PyFloat_AsDouble(PyObject_GetAttrString(scene, "far"));
+  float fovy = PyFloat_AsDouble(PyObject_GetAttrString(scene, "fovy"));
+  int width = PyLong_AsLong(PyObject_GetAttrString(scene, "width"));
+  int height = PyLong_AsLong(PyObject_GetAttrString(scene, "height"));
+
+  // --- splat data
+  PyArrayObject *pos3d_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(pos3d_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyArrayObject *scale_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(scale_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyArrayObject *rot_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(rot_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyArrayObject *opacity_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(opacity_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+  PyArrayObject *sh_arr = reinterpret_cast<PyArrayObject *>(
+      PyArray_FROM_OTF(sh_obj, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY));
+
+  int nsplats = PyArray_SHAPE(pos3d_arr)[0];
+
+  SplatScene splatScene;
+  splatScene.viewmtx = static_cast<float *>(PyArray_DATA(viewmtx_arr));
+  splatScene.projmtx = static_cast<float *>(PyArray_DATA(projmtx_arr));
+  splatScene.bgcolor = static_cast<float *>(PyArray_DATA(bgcolor_arr));
+  splatScene.eye = eye;
+  splatScene.near = near;
+  splatScene.far = far;
+  splatScene.fovy = fovy;
+  splatScene.width = width;
+  splatScene.height = height;
+
+  SplatData splats;
+  splats.nsplats = nsplats;
+  splats.pos3d = static_cast<float *>(PyArray_DATA(pos3d_arr));
+  splats.scale = static_cast<float *>(PyArray_DATA(scale_arr));
+  splats.rot = static_cast<float *>(PyArray_DATA(rot_arr));
+  splats.opacity = static_cast<float *>(PyArray_DATA(opacity_arr));
+  splats.sh = static_cast<float *>(PyArray_DATA(sh_arr));
+
+  // --- call debug compute
+  SplatData2DGPU splats2d_host;
+  gsplat_compute_debug_gpu(splatScene, splats, splats2d_host);
+
+  // --- return as tuple of numpy arrays
+  npy_intp dims2[2] = {nsplats, 2};
+  npy_intp dims1[1] = {nsplats};
+  npy_intp dims4[2] = {nsplats, 4};
+
+  PyObject *py_pos2d =
+      PyArray_SimpleNewFromData(2, dims2, NPY_FLOAT32, splats2d_host.pos2d);
+  PyObject *py_depth =
+      PyArray_SimpleNewFromData(1, dims1, NPY_FLOAT32, splats2d_host.depth);
+  PyObject *py_cov2d =
+      PyArray_SimpleNewFromData(2, dims4, NPY_FLOAT32, splats2d_host.cov2d);
+  PyObject *py_rect =
+      PyArray_SimpleNewFromData(2, dims4, NPY_FLOAT32, splats2d_host.rect);
+  PyObject *py_color =
+      PyArray_SimpleNewFromData(2, dims4, NPY_FLOAT32, splats2d_host.color);
+
+  auto make_capsule = [](void *p) {
+    return PyCapsule_New(p, nullptr,
+                         [](PyObject *c) { free(PyCapsule_GetPointer(c, nullptr)); });
+  };
+  PyArray_SetBaseObject(reinterpret_cast<PyArrayObject *>(py_pos2d),
+                        make_capsule(splats2d_host.pos2d));
+  PyArray_SetBaseObject(reinterpret_cast<PyArrayObject *>(py_depth),
+                        make_capsule(splats2d_host.depth));
+  PyArray_SetBaseObject(reinterpret_cast<PyArrayObject *>(py_cov2d),
+                        make_capsule(splats2d_host.cov2d));
+  PyArray_SetBaseObject(reinterpret_cast<PyArrayObject *>(py_rect),
+                        make_capsule(splats2d_host.rect));
+  PyArray_SetBaseObject(reinterpret_cast<PyArrayObject *>(py_color),
+                        make_capsule(splats2d_host.color));
+
+  PyObject *ret =
+      PyTuple_Pack(5, py_pos2d, py_depth, py_cov2d, py_rect, py_color);
+  Py_DECREF(py_pos2d);
+  Py_DECREF(py_depth);
+  Py_DECREF(py_cov2d);
+  Py_DECREF(py_rect);
+  Py_DECREF(py_color);
+
+  Py_XDECREF(bgcolor_arr); Py_XDECREF(viewmtx_arr); Py_XDECREF(projmtx_arr);
+  Py_XDECREF(pos3d_arr); Py_XDECREF(scale_arr); Py_XDECREF(rot_arr);
+  Py_XDECREF(opacity_arr); Py_XDECREF(sh_arr);
+  return ret;
+}
+
 static PyMethodDef Methods[] = {
     {"add_one", add_one, METH_VARARGS, "Example NumPy C++ function"},
     {"gsplat_rasterize", gsplat_rasterize, METH_VARARGS,
      "Gaussian Splats Rasterizer"},
+    {"gsplat_compute_debug", gsplat_compute_debug, METH_VARARGS,
+     "Debug: returns (pos2d, depth, cov2d, rect, color) from compute kernel"},
     {nullptr, nullptr, 0, nullptr}};
 
 static struct PyModuleDef module = {PyModuleDef_HEAD_INIT, "_C", nullptr, -1,

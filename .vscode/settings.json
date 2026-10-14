@@ -2,7 +2,7 @@
   // ============================================================
   // Python 环境
   // ============================================================
-  "python.defaultInterpreterPath": "D:\\conda\\envs\\ai\\python.exe",
+  "python.defaultInterpreterPath": "/home/wk/miniconda3/envs/ai/bin/python",
   // ============================================================
   // Pylance / 类型推导 (智能提示核心)
   // ============================================================
@@ -93,7 +93,9 @@
     "--header-insertion=never",
     "--log=verbose"
   ],
-  "clangd.path": "C:\\Users\\wkgre\\AppData\\Roaming\\Code\\User\\globalStorage\\llvm-vs-code-extensions.vscode-clangd\\install\\21.1.8\\clangd_21.1.8\\bin\\clangd.exe",
+  // No "clangd.path": the extension manages its own install (clangd 22.1.6 under
+  // globalStorage) for the current platform. A hard-coded path pinned to one
+  // machine's binary breaks clangd everywhere else.
   "C_Cpp.intelliSenseEngine": "disabled",
   "C_Cpp.errorSquiggles": "disabled",
   "files.exclude": {

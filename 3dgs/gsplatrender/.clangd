@@ -1,21 +1,20 @@
 CompileFlags:
   Add:
     - -std=c++17
-    - -ID:/conda/envs/ai/include
-    - -ID:/conda/envs/ai/Library/include
-    - -ID:/conda/envs/ai/Lib/site-packages/torch/include
-    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/torch/csrc/api/include
-    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/TH
-    - -ID:/conda/envs/ai/Lib/site-packages/torch/include/THC
-    - -ID:/Program Files/NVIDIA/CUDA/v13.2/include
+    - -I/home/wk/miniconda3/envs/ai/include/python3.11
+    - -I/home/wk/miniconda3/envs/ai/lib/python3.11/site-packages/numpy/_core/include
+    - -I/usr/local/cuda/include
 ---
 If:
   PathMatch: .*\.(cu|cuh)
 CompileFlags:
   Add:
     - -xcuda
-    - --cuda-path=D:/Program Files/NVIDIA/CUDA/v13.2
-    - --cuda-gpu-arch=sm_89
+    - --cuda-path=/usr/local/cuda
+    # IntelliSense only: the host GPU is sm_120 (RTX 5060 Ti), which ptxas
+    # handles via env.json / nvcc. clangd reads this purely for arch-dependent
+    # builtins.
+    - --cuda-gpu-arch=sm_120
 Diagnostics:
   Suppress:
     - member_function_call_bad_type
